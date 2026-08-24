@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.1-1
+
+- Upgrade base image to Dawarich [1.13.1](https://github.com/Freika/dawarich/releases/tag/1.13.1). The Tiled rendering beta now draws Tracks, Routes and Fog of War as well, so only the Scratch map still falls back to loading everything up front. It stays off until you switch it on under Map v2 → Settings
+- **Slow first boot, then a background job that can run for hours.** Device and importer details move out of the points table into a shared one, which makes a large history noticeably smaller on disk. Existing points are converted in the background after the upgrade: expect high CPU for a while, and the database to grow before it shrinks, so check the drive has room. Your points, tracks, visits and stats are untouched, nothing changes in the app while it runs, and the app boots normally whether or not it finishes
+- Each account can now pick its own geocoding provider (Photon, Geoapify, Nominatim or LocationIQ) under Settings → Integrations. With `reverse_geocoding` enabled in the app configuration, those options still win and the picker only shows what is already in use. Reverse geocoding also now uses one background worker instead of up to five, which only slows anything down if you point the app at your own Photon server
+- No app config changes required
+
 ## 1.13.0-3
 
 - **Stop the background job worker logging hundreds of Redis timeouts a day.** Redis saves to disk once a second, and on the SD cards and USB drives Home Assistant hosts usually run on, that write can take several seconds whenever something else is busy on the same disk. Redis pauses while it happens, and Sidekiq gave up after 3 seconds and reconnected. It now waits 10

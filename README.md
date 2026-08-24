@@ -1,6 +1,6 @@
 # Dawarich Home Assistant Add-on (App)
 
-**Current Dawarich version: 1.13.0** ([release notes](https://github.com/Freika/dawarich/releases/tag/1.13.0))
+**Current Dawarich version: 1.13.1** ([release notes](https://github.com/Freika/dawarich/releases/tag/1.13.1))
 
 [![HA App][ha-app-badge]][ha-app-link]
 
