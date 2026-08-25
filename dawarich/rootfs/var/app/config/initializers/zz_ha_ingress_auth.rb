@@ -82,7 +82,12 @@ module HomeAssistantIngressAuth
       email = user_map[identity[:id]]
       return nil if email.blank?
 
-      User.find_by(email: email)
+      # Devise downcases addresses on save (case_insensitive_keys), while the
+      # map carries admin_email exactly as it was configured. Compare the way
+      # the row was actually stored, or an admin_email with a capital letter in
+      # it never matches and its owner lands in a fresh, empty account instead
+      # of the one holding their history.
+      User.find_by('LOWER(email) = ?', email.to_s.strip.downcase)
     end
 
     # Not everyone tracks through Home Assistant: plenty of people use the
@@ -96,14 +101,31 @@ module HomeAssistantIngressAuth
     # Only an exact, single, unclaimed match counts. Anything ambiguous falls
     # through to creating a new account, which is recoverable, rather than
     # signing someone into a stranger's history, which is not.
+    #
+    # Only the Home Assistant username is matched, never the display name.
+    # "Full name" is a field every Home Assistant user can edit on their own
+    # profile, so matching on it would let anyone name themselves after another
+    # account and be handed it on their next visit. Usernames are set by a Home
+    # Assistant admin, which is the whole reason they can be trusted here.
+    #
+    # The admin account is excluded outright. Its address is configured rather
+    # than derived, on a single-user install it holds everything, and it is
+    # never the answer to "which Home Assistant user is this?".
     def account_named_after(identity)
-      candidates = [identity[:name], identity[:display_name]].filter_map do |value|
-        next if value.blank?
+      slug = slugify(identity[:name])
+      return nil if slug.blank?
 
-        "#{slugify(value)}@dawarich.local"
-      end.uniq
+      email = "#{slug}@dawarich.local"
+      return nil if email == admin_email
 
-      candidates.filter_map { |email| User.find_by(email: email, provider: nil) }.first
+      matches = User.where(email: email, provider: nil).limit(2).to_a
+      return nil unless matches.one?
+
+      matches.first
+    end
+
+    def admin_email
+      ENV['ADMIN_EMAIL'].to_s.strip.downcase
     end
 
     # Built at boot by svc-dawarich from the person entities behind
@@ -118,6 +140,18 @@ module HomeAssistantIngressAuth
     end
 
     def adopt(user, identity)
+      # Never move an identity onto a row that already belongs to somebody
+      # else: that hands this user the other person's history. The unique index
+      # below only catches the case where both rows carry the same uid, which
+      # is not the case that hurts.
+      if user.uid.present? && user.uid != identity[:id]
+        Rails.logger.warn(
+          "[ha-ingress-auth] #{user.email} is already linked to a different Home Assistant user, so " \
+          "#{describe(identity)} was not signed into it. Showing the login form."
+        )
+        return nil
+      end
+
       user.update!(provider: PROVIDER, uid: identity[:id])
       Rails.logger.info(
         "[ha-ingress-auth] linked Home Assistant user #{describe(identity)} to existing account #{user.email}"
