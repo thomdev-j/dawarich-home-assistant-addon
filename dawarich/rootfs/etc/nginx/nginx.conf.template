@@ -28,6 +28,40 @@ http {
         ''      $scheme;
     }
 
+    # Ingress auto-login: only Supervisor may assert who the user is.
+    #
+    # Home Assistant proves identity in X-Remote-User-Id on ingress requests and
+    # strips any copy the browser sent, so through ingress that header is as good
+    # as HA's own login. Nothing else on the hassio network gets that guarantee,
+    # and any container there can open this port directly, so the header is only
+    # honoured from Supervisor's own addresses and blanked for everyone else.
+    # Blanking rather than passing through matters: an empty header cannot be
+    # smuggled past. The address list is written at boot by init-dawarich.sh and
+    # holds every address `supervisor` resolves to, IPv4 and IPv6 alike, because
+    # which one a request arrives on is not ours to predict.
+    map $remote_addr $ingress_trusted {
+        default 0;
+        include /etc/nginx/ingress_trusted_addresses.conf;
+    }
+    # Rails only trusts an identity when this secret rides along, so a request
+    # that reaches Rails on port 3000 can never carry one.
+    map $ingress_trusted $ingress_auth_secret {
+        default "";
+        1       "INGRESS_AUTH_SECRET";
+    }
+    map "$ingress_trusted:$http_x_remote_user_id" $ingress_user_id {
+        default        "";
+        "~^1:(.+)$"    $1;
+    }
+    map "$ingress_trusted:$http_x_remote_user_name" $ingress_user_name {
+        default        "";
+        "~^1:(.+)$"    $1;
+    }
+    map "$ingress_trusted:$http_x_remote_user_display_name" $ingress_user_display_name {
+        default        "";
+        "~^1:(.+)$"    $1;
+    }
+
     # On sign-out, expire _dawarich_session at root path "/" to clear stale
     # duplicates that HA ingress can leave behind (Devise only clears its own
     # path, so the ghost cookie keeps the user logged in).
@@ -61,6 +95,10 @@ http {
             proxy_set_header Origin "http://localhost";
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Dawarich-Ingress-Secret $ingress_auth_secret;
+            proxy_set_header X-Remote-User-Id $ingress_user_id;
+            proxy_set_header X-Remote-User-Name $ingress_user_name;
+            proxy_set_header X-Remote-User-Display-Name $ingress_user_display_name;
             # Always tell Rails it's http so it generates http://localhost/ URLs
             # that our sub_filters can rewrite. Without this, HTTPS access (e.g.
             # Cloudflare tunnel) causes Rails to generate https://localhost/ URLs

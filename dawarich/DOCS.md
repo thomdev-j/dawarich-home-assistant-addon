@@ -42,6 +42,7 @@ The app subscribes to Home Assistant's real-time event stream and pushes locatio
 |---|---|---|
 | `ha_tracked_entities` | _(empty)_ | Comma-separated list of `device_tracker.*` entity IDs to track. Leave empty to disable. |
 | `ha_min_distance` | `10` | Minimum distance in meters before a new position is recorded (0-1000). Filters GPS drift when stationary. Set to `0` to disable. |
+| `ingress_auto_login` | `auto` | Sign users in from their Home Assistant account when opening the app from the sidebar. `auto` is on for new installs and off for existing ones, `on`/`off` decide it yourself. Users are matched through `ha_tracked_entities`, then by the account named after them, and anyone still unmatched gets their own new account. Passwords and the admin account keep working. |
 
 **Basic usage** — track a single device under the admin user:
 ```

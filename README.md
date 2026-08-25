@@ -87,6 +87,35 @@ Check the app logs for `connected — receiving real-time state changes` to conf
 
 Duplicate locations (same lat/lon) are always skipped. Additionally, positions closer than `ha_min_distance` meters (default: 10m) to the last recorded point are filtered out — this prevents GPS drift from generating spurious data points when your phone is stationary.
 
+## Signing in automatically
+
+Home Assistant knows who is looking at the sidebar, so the app can sign that person in
+without a Dawarich password. Set `ingress_auto_login` to `on` and opening Dawarich from the
+sidebar drops you straight into your own map.
+
+It matches you to an account through the entities in `ha_tracked_entities`: Home Assistant
+knows which of its accounts is behind a person entity, and behind any `device_tracker` that
+a person lists as theirs, and this app already knows which Dawarich user that entity feeds.
+Nothing extra to configure.
+
+- **Existing installs are left alone.** `auto` means on for new installs and off for one
+  that predates the feature, because an update should not change how you log in. Turn it
+  `on` when you want it.
+- **You always land in your own account, never someone else's.** If nobody in
+  `ha_tracked_entities` matches, it looks for the account this app would have named after
+  you (Home Assistant user `thomas` lines up with `thomas@dawarich.local`) and takes you
+  there with your history. Only when nothing matches at all does it create a fresh account,
+  so a new person in the household simply gets their own map. An account already linked to
+  somebody else is never taken over.
+- **Your password still works.** It is unchanged, and it is still what you use on port 3000,
+  or after signing out. Signing out keeps you signed out for 30 minutes, so you can log in
+  as somebody else.
+- **Only Home Assistant can vouch for you.** The identity is accepted solely on requests
+  coming through ingress from Supervisor itself. Anything arriving another way, including
+  port 3000 and other add-ons on the same Docker network, gets the login form.
+- The admin account from `admin_email` is untouched and stays your way in when Home
+  Assistant is unavailable.
+
 ## All Configuration Options
 
 The same options are also documented in the app's **Documentation** tab ([DOCS.md](dawarich/DOCS.md)).
@@ -108,6 +137,7 @@ The same options are also documented in the app's **Documentation** tab ([DOCS.m
 |---|---|---|
 | `ha_tracked_entities` | _(empty)_ | Comma-separated `device_tracker.*` entity IDs, optionally with a `:Name` suffix (see [Which devices to track](#which-devices-to-track) above). Leave empty to disable automatic tracking. Find your entity IDs under **Developer Tools → States**. |
 | `ha_min_distance` | `10` | Minimum distance in meters a device must move before the new position is recorded (0-1000). Filters GPS drift when stationary, which is typically 3-15m. Set to `0` to record every position change. |
+| `ingress_auto_login` | `auto` | Sign people in automatically from their Home Assistant account when they open the app from the sidebar (see [Signing in automatically](#signing-in-automatically)). `auto` turns it on for new installs and leaves existing ones as they were; `on` and `off` decide it yourself. |
 
 ### Reverse Geocoding
 

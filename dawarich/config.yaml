@@ -1,5 +1,5 @@
 name: Dawarich
-version: "1.13.1-1"
+version: "1.13.1-2"
 slug: dawarich
 description: Self-hosted location tracking — Google Timeline alternative
 url: https://github.com/thomdev-j/dawarich-home-assistant-addon
@@ -39,6 +39,7 @@ options:
   admin_password: "changemeplease"
   ha_tracked_entities: ""
   ha_min_distance: 10
+  ingress_auto_login: "auto"
   reverse_geocoding: false
   photon_api_host: "https://photon.komoot.io"
   photon_api_key: ""
@@ -52,6 +53,7 @@ schema:
   admin_password: str
   ha_tracked_entities: str
   ha_min_distance: "int(0,1000)"
+  ingress_auto_login: "list(auto|on|off)"
   reverse_geocoding: bool
   photon_api_host: str
   photon_api_key: str

@@ -117,6 +117,19 @@ else
   openssl rand -hex 64 | tee /data/dawarich/secret_key_base > /var/run/s6/container_environment/SECRET_KEY_BASE
 fi
 
+# --- Ingress auto-login: shared secret between nginx and Rails ---
+# nginx stamps this on requests it has verified came from Supervisor, and Rails
+# trusts a Home Assistant identity header only when it matches. Anything reaching
+# Rails another way (port 3000, another container on the hassio network) carries
+# no secret and therefore no identity, so it lands on the normal login form.
+if [ -f /data/dawarich/ingress_auth_secret ]; then
+  INGRESS_AUTH_SECRET="$(cat /data/dawarich/ingress_auth_secret)"
+else
+  INGRESS_AUTH_SECRET="$(openssl rand -hex 32)"
+  printf '%s' "$INGRESS_AUTH_SECRET" > /data/dawarich/ingress_auth_secret
+fi
+printf '%s' "$INGRESS_AUTH_SECRET" > /var/run/s6/container_environment/INGRESS_AUTH_SECRET
+
 # --- PostgreSQL init on first run ---
 # A missing cluster means either a first install or a restored backup (HA backups
 # exclude postgres/**). svc-dawarich needs to tell those apart to decide whether
@@ -141,6 +154,61 @@ fi
 chown -R postgres:postgres /data/postgres
 chown -R postgres:postgres /run/postgresql
 
+# --- Ingress auto-login: resolve the mode for this install ---
+# "auto" means on for a fresh install and off for one that predates this feature,
+# because an update must never change how people log in. Which side of that line
+# an install is on is only visible on the one boot that creates the database, so
+# that boot records the answer and every later boot reads the record. Inferring
+# it from the absence of the legacy marker instead would say "fresh" on boot 1
+# and "legacy" on boot 2 of the very same install, silently turning auto-login
+# off again the first time Home Assistant restarts the add-on.
+#
+# An empty PostgreSQL directory does not by itself mean a new install. Home
+# Assistant backups exclude postgres/** and carry a pg_dumpall instead, so a
+# restore onto new hardware arrives with no database but with that dump, and
+# svc-dawarich imports it moments later. Every account and every point comes
+# back, so this is the user's existing install and its login flow must not
+# change. The dump is the thing that tells the two apart, and it is only ever
+# on disk here when there is something to restore.
+PG_FRESH_INIT_NOW="$(cat /var/run/s6/container_environment/PG_FRESH_INIT 2>/dev/null || echo false)"
+LEGACY_INSTALL_MARKER=/data/dawarich/.pre_ingress_auth_install
+FRESH_INSTALL_MARKER=/data/dawarich/.ingress_auth_fresh_install
+if [ ! -f "$LEGACY_INSTALL_MARKER" ] && [ ! -f "$FRESH_INSTALL_MARKER" ]; then
+  if [ "$PG_FRESH_INIT_NOW" = "true" ] && [ ! -s /data/dawarich/backup.sql ]; then
+    touch "$FRESH_INSTALL_MARKER"
+  else
+    touch "$LEGACY_INSTALL_MARKER"
+  fi
+fi
+
+case "$(bashio::config 'ingress_auto_login')" in
+  on)  INGRESS_AUTO_LOGIN="on" ;;
+  off) INGRESS_AUTO_LOGIN="off" ;;
+  *)   if [ -f "$FRESH_INSTALL_MARKER" ]; then INGRESS_AUTO_LOGIN="on"; else INGRESS_AUTO_LOGIN="off"; fi ;;
+esac
+
+printf '%s' "$INGRESS_AUTO_LOGIN" > /var/run/s6/container_environment/INGRESS_AUTO_LOGIN
+bashio::log.info "Ingress auto-login: ${INGRESS_AUTO_LOGIN}"
+
+# Only Supervisor may present a Home Assistant identity, so nginx is given the
+# addresses it answers on. Every address is listed, IPv4 and IPv6 alike, because
+# which family a request arrives on is not ours to predict. An empty list fails
+# closed: no request is trusted, rather than every request being trusted.
+TRUSTED_LIST=/etc/nginx/ingress_trusted_addresses.conf
+: > "$TRUSTED_LIST"
+SUPERVISOR_ADDRESSES="$( { getent ahosts supervisor; getent ahostsv6 supervisor; } 2>/dev/null | awk '{print $1}' | sort -u)"
+for addr in $SUPERVISOR_ADDRESSES; do
+  printf '%s 1;\n' "$addr" >> "$TRUSTED_LIST"
+done
+
+if [ -s "$TRUSTED_LIST" ]; then
+  [ "$INGRESS_AUTO_LOGIN" = "on" ] && \
+    bashio::log.info "Trusting ingress identity from: $(echo $SUPERVISOR_ADDRESSES | tr '\n' ' ')"
+else
+  [ "$INGRESS_AUTO_LOGIN" = "on" ] && \
+    bashio::log.warning "Could not resolve Supervisor, so no request will be trusted and auto-login stays inactive."
+fi
+
 # --- Generate nginx ingress proxy config ---
 # Fetch the ingress entry path from Supervisor API (e.g. /api/hassio_ingress/<token>)
 INGRESS_ENTRY=$(curl -s -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
@@ -150,10 +218,12 @@ if [ -n "$INGRESS_ENTRY" ]; then
   # Remove trailing slash
   INGRESS_ENTRY="${INGRESS_ENTRY%/}"
   bashio::log.info "Ingress path: ${INGRESS_ENTRY}"
-  sed "s|INGRESS_PATH|${INGRESS_ENTRY}|g" \
+  sed -e "s|INGRESS_PATH|${INGRESS_ENTRY}|g" \
+      -e "s|INGRESS_AUTH_SECRET|${INGRESS_AUTH_SECRET}|g" \
     /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 else
   bashio::log.warning "Could not determine ingress path, using passthrough"
-  sed "s|INGRESS_PATH||g" \
+  sed -e "s|INGRESS_PATH||g" \
+      -e "s|INGRESS_AUTH_SECRET|${INGRESS_AUTH_SECRET}|g" \
     /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 fi
