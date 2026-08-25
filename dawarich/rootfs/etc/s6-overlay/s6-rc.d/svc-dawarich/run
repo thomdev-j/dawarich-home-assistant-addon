@@ -236,11 +236,23 @@ ha_user_for_entity() {
 HA_USER_MAP="{}"
 MAPPED_COUNT=0
 map_entity() {
-  local entity_id="$1" email="$2" ha_user
+  local entity_id="$1" email="$2" ha_user existing
   entity_id=$(echo "$entity_id" | xargs)
   [ -z "$entity_id" ] || [ -z "$email" ] && return 0
   ha_user=$(ha_user_for_entity "$entity_id")
   if [ -n "$ha_user" ]; then
+    # One Home Assistant account can sit behind several entities, and this map
+    # is keyed by that account, so a second entity for the same person would
+    # quietly replace the first. Keep the first and say what happened: the
+    # admin loop runs last and would otherwise win every tie, which turns a
+    # forgotten ":Name" suffix into "signs in as the admin".
+    existing=$(printf '%s' "$HA_USER_MAP" | jq -r --arg u "$ha_user" '.[$u] // empty')
+    if [ -n "$existing" ]; then
+      if [ "$existing" != "$email" ]; then
+        echo "Auto-login map: ${entity_id} shares a Home Assistant account with an entity already mapped to ${existing}; keeping ${existing} and ignoring ${email}"
+      fi
+      return 0
+    fi
     HA_USER_MAP=$(echo "$HA_USER_MAP" | jq --arg u "$ha_user" --arg e "$email" '. + {($u): $e}')
     MAPPED_COUNT=$((MAPPED_COUNT + 1))
     echo "Auto-login map: ${entity_id} -> ${email}"
