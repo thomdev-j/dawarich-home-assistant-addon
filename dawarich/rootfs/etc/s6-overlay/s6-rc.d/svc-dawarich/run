@@ -222,59 +222,67 @@ fi
 #
 # Rebuilt on every boot because the entity mapping can change, and written even
 # when empty so a stale file can never outlive the config that produced it.
-HA_STATES=$(curl -s -m 10 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-  http://supervisor/core/api/states 2>/dev/null)
-
-ha_user_for_entity() {
-  printf '%s' "$HA_STATES" | jq -r --arg e "$1" '
-    [ (.[] | select(.entity_id == $e) | .attributes.user_id // empty),
-      (.[] | select((.attributes.device_trackers // []) | index($e)) | .attributes.user_id // empty) ]
-    | map(select(. != "")) | first // empty
-  ' 2>/dev/null
-}
-
-HA_USER_MAP="{}"
-MAPPED_COUNT=0
-map_entity() {
-  local entity_id="$1" email="$2" ha_user existing
-  entity_id=$(echo "$entity_id" | xargs)
-  [ -z "$entity_id" ] || [ -z "$email" ] && return 0
-  ha_user=$(ha_user_for_entity "$entity_id")
-  if [ -n "$ha_user" ]; then
-    # One Home Assistant account can sit behind several entities, and this map
-    # is keyed by that account, so a second entity for the same person would
-    # quietly replace the first. Keep the first and say what happened: the
-    # admin loop runs last and would otherwise win every tie, which turns a
-    # forgotten ":Name" suffix into "signs in as the admin".
-    existing=$(printf '%s' "$HA_USER_MAP" | jq -r --arg u "$ha_user" '.[$u] // empty')
-    if [ -n "$existing" ]; then
-      if [ "$existing" != "$email" ]; then
-        echo "Auto-login map: ${entity_id} shares a Home Assistant account with an entity already mapped to ${existing}; keeping ${existing} and ignoring ${email}"
-      fi
-      return 0
-    fi
-    HA_USER_MAP=$(echo "$HA_USER_MAP" | jq --arg u "$ha_user" --arg e "$email" '. + {($u): $e}')
-    MAPPED_COUNT=$((MAPPED_COUNT + 1))
-    echo "Auto-login map: ${entity_id} -> ${email}"
-  else
-    echo "Auto-login map: no Home Assistant account behind ${entity_id}, skipping"
-  fi
-}
-
-for name in "${!USER_ENTITIES[@]}"; do
-  for entity_id in ${USER_ENTITIES[$name]}; do
-    map_entity "$entity_id" "${name}@dawarich.local"
-  done
-done
-for entity_id in $ADMIN_ENTITIES; do
-  map_entity "$entity_id" "$ADMIN_EMAIL"
-done
-echo "$HA_USER_MAP" > /data/dawarich/ha_user_map.json
-
+#
+# Skipped entirely when auto-login is off. Rails only ever opens this file
+# through HomeAssistantIngressAuth.enabled?, which insists on "on", so on an
+# install that has not opted in the states call below is up to ten seconds of
+# boot time spent building something nobody reads. Switching the option on
+# takes an add-on restart, which comes back through here and builds it then.
 INGRESS_AUTO_LOGIN=$(cat /var/run/s6/container_environment/INGRESS_AUTO_LOGIN 2>/dev/null || echo off)
-if [ "$INGRESS_AUTO_LOGIN" = "on" ] && [ "$MAPPED_COUNT" = "0" ]; then
-  echo "Auto-login: nothing in ha_tracked_entities points at a Home Assistant account, so anyone opening the"
-  echo "Auto-login: app gets their own Dawarich account, or the one already named after them."
+if [ "$INGRESS_AUTO_LOGIN" != "off" ]; then
+  HA_STATES=$(curl -s -m 10 -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+    http://supervisor/core/api/states 2>/dev/null)
+
+  ha_user_for_entity() {
+    printf '%s' "$HA_STATES" | jq -r --arg e "$1" '
+      [ (.[] | select(.entity_id == $e) | .attributes.user_id // empty),
+        (.[] | select((.attributes.device_trackers // []) | index($e)) | .attributes.user_id // empty) ]
+      | map(select(. != "")) | first // empty
+    ' 2>/dev/null
+  }
+
+  HA_USER_MAP="{}"
+  MAPPED_COUNT=0
+  map_entity() {
+    local entity_id="$1" email="$2" ha_user existing
+    entity_id=$(echo "$entity_id" | xargs)
+    [ -z "$entity_id" ] || [ -z "$email" ] && return 0
+    ha_user=$(ha_user_for_entity "$entity_id")
+    if [ -n "$ha_user" ]; then
+      # One Home Assistant account can sit behind several entities, and this map
+      # is keyed by that account, so a second entity for the same person would
+      # quietly replace the first. Keep the first and say what happened: the
+      # admin loop runs last and would otherwise win every tie, which turns a
+      # forgotten ":Name" suffix into "signs in as the admin".
+      existing=$(printf '%s' "$HA_USER_MAP" | jq -r --arg u "$ha_user" '.[$u] // empty')
+      if [ -n "$existing" ]; then
+        if [ "$existing" != "$email" ]; then
+          echo "Auto-login map: ${entity_id} shares a Home Assistant account with an entity already mapped to ${existing}; keeping ${existing} and ignoring ${email}"
+        fi
+        return 0
+      fi
+      HA_USER_MAP=$(echo "$HA_USER_MAP" | jq --arg u "$ha_user" --arg e "$email" '. + {($u): $e}')
+      MAPPED_COUNT=$((MAPPED_COUNT + 1))
+      echo "Auto-login map: ${entity_id} -> ${email}"
+    else
+      echo "Auto-login map: no Home Assistant account behind ${entity_id}, skipping"
+    fi
+  }
+
+  for name in "${!USER_ENTITIES[@]}"; do
+    for entity_id in ${USER_ENTITIES[$name]}; do
+      map_entity "$entity_id" "${name}@dawarich.local"
+    done
+  done
+  for entity_id in $ADMIN_ENTITIES; do
+    map_entity "$entity_id" "$ADMIN_EMAIL"
+  done
+  echo "$HA_USER_MAP" > /data/dawarich/ha_user_map.json
+
+  if [ "$MAPPED_COUNT" = "0" ]; then
+    echo "Auto-login: nothing in ha_tracked_entities points at a Home Assistant account, so anyone opening the"
+    echo "Auto-login: app gets their own Dawarich account, or the one already named after them."
+  fi
 fi
 
 # Precompile assets if needed
