@@ -156,18 +156,27 @@ chown -R postgres:postgres /run/postgresql
 
 # --- Ingress auto-login: resolve the mode for this install ---
 # "auto" means on for a fresh install and off for one that predates this feature,
-# because an update must never change how people log in. The marker records which
-# side of that line an install is on, so the answer survives later restarts.
+# because an update must never change how people log in. Which side of that line
+# an install is on is only visible on the one boot that creates the database, so
+# that boot records the answer and every later boot reads the record. Inferring
+# it from the absence of the legacy marker instead would say "fresh" on boot 1
+# and "legacy" on boot 2 of the very same install, silently turning auto-login
+# off again the first time Home Assistant restarts the add-on.
 PG_FRESH_INIT_NOW="$(cat /var/run/s6/container_environment/PG_FRESH_INIT 2>/dev/null || echo false)"
 LEGACY_INSTALL_MARKER=/data/dawarich/.pre_ingress_auth_install
-if [ ! -f "$LEGACY_INSTALL_MARKER" ] && [ "$PG_FRESH_INIT_NOW" != "true" ]; then
-  touch "$LEGACY_INSTALL_MARKER"
+FRESH_INSTALL_MARKER=/data/dawarich/.ingress_auth_fresh_install
+if [ ! -f "$LEGACY_INSTALL_MARKER" ] && [ ! -f "$FRESH_INSTALL_MARKER" ]; then
+  if [ "$PG_FRESH_INIT_NOW" = "true" ]; then
+    touch "$FRESH_INSTALL_MARKER"
+  else
+    touch "$LEGACY_INSTALL_MARKER"
+  fi
 fi
 
 case "$(bashio::config 'ingress_auto_login')" in
   on)  INGRESS_AUTO_LOGIN="on" ;;
   off) INGRESS_AUTO_LOGIN="off" ;;
-  *)   if [ -f "$LEGACY_INSTALL_MARKER" ]; then INGRESS_AUTO_LOGIN="off"; else INGRESS_AUTO_LOGIN="on"; fi ;;
+  *)   if [ -f "$FRESH_INSTALL_MARKER" ]; then INGRESS_AUTO_LOGIN="on"; else INGRESS_AUTO_LOGIN="off"; fi ;;
 esac
 
 printf '%s' "$INGRESS_AUTO_LOGIN" > /var/run/s6/container_environment/INGRESS_AUTO_LOGIN
