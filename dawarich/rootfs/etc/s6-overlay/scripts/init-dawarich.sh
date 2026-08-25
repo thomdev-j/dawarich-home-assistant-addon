@@ -162,11 +162,19 @@ chown -R postgres:postgres /run/postgresql
 # it from the absence of the legacy marker instead would say "fresh" on boot 1
 # and "legacy" on boot 2 of the very same install, silently turning auto-login
 # off again the first time Home Assistant restarts the add-on.
+#
+# An empty PostgreSQL directory does not by itself mean a new install. Home
+# Assistant backups exclude postgres/** and carry a pg_dumpall instead, so a
+# restore onto new hardware arrives with no database but with that dump, and
+# svc-dawarich imports it moments later. Every account and every point comes
+# back, so this is the user's existing install and its login flow must not
+# change. The dump is the thing that tells the two apart, and it is only ever
+# on disk here when there is something to restore.
 PG_FRESH_INIT_NOW="$(cat /var/run/s6/container_environment/PG_FRESH_INIT 2>/dev/null || echo false)"
 LEGACY_INSTALL_MARKER=/data/dawarich/.pre_ingress_auth_install
 FRESH_INSTALL_MARKER=/data/dawarich/.ingress_auth_fresh_install
 if [ ! -f "$LEGACY_INSTALL_MARKER" ] && [ ! -f "$FRESH_INSTALL_MARKER" ]; then
-  if [ "$PG_FRESH_INIT_NOW" = "true" ]; then
+  if [ "$PG_FRESH_INIT_NOW" = "true" ] && [ ! -s /data/dawarich/backup.sql ]; then
     touch "$FRESH_INSTALL_MARKER"
   else
     touch "$LEGACY_INSTALL_MARKER"
