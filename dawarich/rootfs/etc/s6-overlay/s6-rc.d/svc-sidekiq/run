@@ -5,8 +5,24 @@ until pg_isready -h localhost -p 5432 -U postgres -q; do
   sleep 1
 done
 
-# Wait briefly for database to be created by svc-dawarich
-sleep 5
+# Wait for svc-dawarich to create the database and finish `rails db:migrate`.
+#
+# Five seconds used to be the guess. It is not enough on a first install, where
+# the schema is still being created, and starting early is not merely pointless:
+# jobs write to the tables the migrations are altering. 1.14.1 adds a foreign
+# key to `points` with `lock_timeout = 5s` and gives up after five attempts, and
+# the release before it enqueues two fleet-wide backfills that write to exactly
+# that table. Sidekiq picks those up seconds later, still mid-migrate. On the SD
+# cards and USB drives Home Assistant usually runs on, one write batch can hold
+# its lock past the timeout, and a migration that raises takes svc-dawarich down
+# with it (it exits 1), so the app restarts in a loop.
+DB_READY_MARKER=/var/run/dawarich-db-ready
+if [ ! -f "$DB_READY_MARKER" ]; then
+  echo "Waiting for database migrations to finish before starting Sidekiq..."
+  until [ -f "$DB_READY_MARKER" ]; do
+    sleep 2
+  done
+fi
 
 cd /var/app
 

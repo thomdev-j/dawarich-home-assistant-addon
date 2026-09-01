@@ -2,6 +2,13 @@
 
 export PATH="/usr/lib/postgresql/17/bin:${PATH}"
 
+# svc-sidekiq waits for this marker before it starts, so that background jobs
+# are not writing to the database while db:migrate below takes locks on it.
+# Clear it first: s6 restarts this service on its own after a failure, and the
+# migrations are about to run again.
+DB_READY_MARKER=/var/run/dawarich-db-ready
+rm -f "$DB_READY_MARKER"
+
 # Wait for PostgreSQL to be ready
 until pg_isready -h localhost -p 5432 -U postgres -q; do
   sleep 1
@@ -94,6 +101,10 @@ if ! bundle exec rails db:migrate 2>&1; then
   echo "ERROR: Database migration failed! Check logs above."
   exit 1
 fi
+
+# Release Sidekiq. Everything below this point is application-level work that a
+# background job can safely run alongside.
+touch "$DB_READY_MARKER"
 
 # Post-upgrade backfill tasks (idempotent, gated by per-version marker).
 # 1.7.9: backfill place names and clean up suggested places for the new
