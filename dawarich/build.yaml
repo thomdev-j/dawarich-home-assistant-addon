@@ -1,6 +1,6 @@
 build_from:
-  aarch64: freikin/dawarich:1.14.1
-  amd64: freikin/dawarich:1.14.1
+  aarch64: freikin/dawarich:1.14.2
+  amd64: freikin/dawarich:1.14.2
 args:
   S6_OVERLAY_VERSION: "3.2.2.0"
   BASHIO_VERSION: "0.16.2"

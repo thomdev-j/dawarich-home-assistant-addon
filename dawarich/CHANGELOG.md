@@ -1,11 +1,11 @@
 # Changelog
 
-## 1.14.1-1
+## 1.14.2-1
 
-- Upgrade base image to Dawarich [1.14.0](https://github.com/Freika/dawarich/releases/tag/1.14.0) and [1.14.1](https://github.com/Freika/dawarich/releases/tag/1.14.1). The headline is a Video Studio that turns the route on your map, or a trip, into a short MP4, and Polish and Catalan joined the languages under Settings → General
+- Upgrade base image to Dawarich [1.14.0](https://github.com/Freika/dawarich/releases/tag/1.14.0), [1.14.1](https://github.com/Freika/dawarich/releases/tag/1.14.1) and [1.14.2](https://github.com/Freika/dawarich/releases/tag/1.14.2). The headline is a Video Studio that turns the route on your map, or a trip, into a short MP4, and Polish and Catalan joined the languages under Settings → General
 - **The Video Studio needs an https address to work.** It encodes the video in your browser, using an interface browsers only hand out on a secure page, so opening Home Assistant at `http://homeassistant.local:8123` gets you "unsupported browser" whichever browser you use. Through Nabu Casa, or your own https reverse proxy, it works. Nothing else in the app depends on it. Videos that you save are stored in `/data` next to your imports and exports, so they end up in Home Assistant backups as well: the 10 newest per account are kept and files older than 30 days are removed
 - **Slow first boot again, and your monthly distances will change.** A phone that replays a stale position after landing could bill a trip as dozens of instant intercontinental flights, so bursts like that are now flagged and any leg faster than 1200 km/h stops counting towards distance. Every history is re-checked in the background after the upgrade and the affected tracks and stats are rebuilt, so expect high CPU for a while and past monthly totals to move. The background worker now waits for the upgrade's database changes to finish before it starts, so a busy disk cannot make one of them time out and leave the app restarting in a loop. Your points, trips and imports are untouched
-- Points in the United States, and in a handful of other countries whose name the geocoder spells differently, were never linked to their country and were quietly missing from the countries you have visited. They are repaired in the background after the upgrade. No app config changes required
+- Cities where your phone reported infrequently are counted again, so a home that had dropped out of your statistics comes back and time spent will generally go up. **Existing months keep their old numbers until you press "Update stats" on the Stats page.** Points in the United States, and a handful of other countries whose name the geocoder spells differently, were quietly missing from the countries you have visited and are repaired in the background. The "Max Gap Between Points" map setting is retired, its job now runs the same way for everyone. No app config changes required
 
 ## 1.13.1-1
 
