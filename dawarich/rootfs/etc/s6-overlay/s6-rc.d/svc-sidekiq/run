@@ -16,6 +16,11 @@ done
 # cards and USB drives Home Assistant usually runs on, one write batch can hold
 # its lock past the timeout, and a migration that raises takes svc-dawarich down
 # with it (it exits 1), so the app restarts in a loop.
+#
+# 1.14.3 adds a second reason: it builds an index on `points` concurrently, and
+# CREATE INDEX CONCURRENTLY waits for every transaction already touching the
+# table before either of its two passes can finish. A Sidekiq that is busy
+# backfilling `points` keeps that wait going for as long as it keeps working.
 DB_READY_MARKER=/var/run/dawarich-db-ready
 if [ ! -f "$DB_READY_MARKER" ]; then
   echo "Waiting for database migrations to finish before starting Sidekiq..."
