@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.15.3-2
+
+- Fix the map disappearing in the Home Assistant sidebar: the new vendored MapLibre module's importmap URL missed the ingress prefix, so browsers requested it from Home Assistant and refused its response as JavaScript
+- Rewrite the MapLibre module URL through ingress; its shared module and worker resolve relative to that URL. This also restores the MapLibre imports used by Video Studio and Poster Studio
+- Dawarich remains at 1.15.3; no database migrations or option changes
+
 ## 1.15.3-1
 
 - Upgrade base image to Dawarich [1.15.0](https://github.com/Freika/dawarich/releases/tag/1.15.0), [1.15.1](https://github.com/Freika/dawarich/releases/tag/1.15.1), [1.15.2](https://github.com/Freika/dawarich/releases/tag/1.15.2) and [1.15.3](https://github.com/Freika/dawarich/releases/tag/1.15.3). The headline is a new vector-tile-only map renderer with in-map point editing, TREK trip import, shared trip maps for family members, and exploration achievements

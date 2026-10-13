@@ -110,6 +110,13 @@ http {
             sub_filter '"/assets/' '"INGRESS_PATH/assets/';
             sub_filter "'/assets/" "'INGRESS_PATH/assets/";
 
+            # Dawarich 1.15 vendors MapLibre's ESM entrypoint under /maplibre.
+            # Its importmap value is not an HTML attribute, so it needs its own
+            # rewrite. Relative shared-module and worker URLs then inherit the
+            # ingress prefix from the entrypoint's import.meta.url.
+            sub_filter '"/maplibre/' '"INGRESS_PATH/maplibre/';
+            sub_filter "'/maplibre/" "'INGRESS_PATH/maplibre/";
+
             # MapLibre builds its vector-tile URL from window.location.origin,
             # so the ingress prefix is missing, and it fetches the tiles from a
             # web worker that the patch script below never reaches. Rewriting
