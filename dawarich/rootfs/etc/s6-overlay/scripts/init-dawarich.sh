@@ -36,10 +36,18 @@ printf '%s' "$(bashio::config 'background_processing_concurrency')" > /var/run/s
 # its next login attempt, instead of being told the account is locked.
 #
 # Dawarich hardcodes https:// in those links, so the address only works from
-# outside if it is one you actually reach over https — a Nabu Casa or reverse
-# proxy hostname. `external_url` overrides the guess for that case; without it
+# outside if it is one you actually reach over https through a reverse proxy.
+# `external_url` overrides the guess for that case; without it
 # we keep using the first application_hosts entry, which is right for LAN use.
-PRIMARY_HOST="$(bashio::config 'external_url' '')"
+# bashio 0.16.2 treats an empty default argument as "null". Check existence
+# explicitly so omitted optional strings stay empty during upgrades.
+optional_config_string() {
+  if bashio::config.exists "$1"; then
+    bashio::config "$1"
+  fi
+}
+
+PRIMARY_HOST="$(optional_config_string 'external_url')"
 PRIMARY_HOST="${PRIMARY_HOST#https://}"
 PRIMARY_HOST="${PRIMARY_HOST#http://}"
 PRIMARY_HOST="${PRIMARY_HOST%%/*}"
@@ -56,12 +64,12 @@ printf '%s' "$PRIMARY_HOST" > /var/run/s6/container_environment/DOMAIN
 # `plain` and there is no user name to send. Nothing in the app surfaces that;
 # it only shows up as a job retrying in the background. Family invitations,
 # password resets and digest mails all go through it.
-SMTP_SERVER="$(bashio::config 'smtp_server' '')"
+SMTP_SERVER="$(optional_config_string 'smtp_server')"
 if [ -n "$SMTP_SERVER" ]; then
-  SMTP_FROM="$(bashio::config 'smtp_from' '')"
+  SMTP_FROM="$(optional_config_string 'smtp_from')"
   [ -z "$SMTP_FROM" ] && SMTP_FROM="$(bashio::config 'admin_email')"
   SMTP_AUTH="$(bashio::config 'smtp_authentication' 'plain')"
-  SMTP_USERNAME="$(bashio::config 'smtp_username' '')"
+  SMTP_USERNAME="$(optional_config_string 'smtp_username')"
 
   printf '%s' "$SMTP_SERVER"                             > /var/run/s6/container_environment/SMTP_SERVER
   printf '%s' "$(bashio::config 'smtp_port' '587')"      > /var/run/s6/container_environment/SMTP_PORT
@@ -73,7 +81,7 @@ if [ -n "$SMTP_SERVER" ]; then
   # user name, which is what produces the SMTP-AUTH error above.
   if [ -n "$SMTP_USERNAME" ]; then
     printf '%s' "$SMTP_USERNAME"                          > /var/run/s6/container_environment/SMTP_USERNAME
-    printf '%s' "$(bashio::config 'smtp_password' '')"    > /var/run/s6/container_environment/SMTP_PASSWORD
+    printf '%s' "$(optional_config_string 'smtp_password')" > /var/run/s6/container_environment/SMTP_PASSWORD
   elif [ "$SMTP_AUTH" != "none" ]; then
     bashio::log.warning "SMTP: smtp_username is empty but smtp_authentication is '${SMTP_AUTH}'."
     bashio::log.warning "SMTP: set smtp_authentication to 'none' for an unauthenticated relay, or mail will fail to send."

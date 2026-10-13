@@ -110,9 +110,10 @@ smtp_starttls: true
 **Links in mails.** Dawarich builds them from a single hostname and always with `https://` — that is hardcoded
 upstream. The app defaults to the first entry of `application_hosts`, which is right if you only ever open
 Dawarich on your LAN, but a password-reset link pointing at `https://homeassistant.local:3000` is no use from a
-phone on mobile data. Set `external_url` to the address you actually reach the app on from outside — your Nabu
-Casa address or your own reverse-proxy hostname — and add that hostname to `application_hosts` too. A scheme and
-path are stripped, so `https://dawarich.example.com/` and `dawarich.example.com` behave the same.
+phone on mobile data. Set `external_url` to your own Dawarich reverse-proxy hostname and add that hostname to
+`application_hosts` too. Nabu Casa's Home Assistant hostname alone does not expose Dawarich: ingress also needs
+its path and an authenticated Home Assistant session. A scheme and path are stripped from `external_url`, so
+`https://dawarich.example.com/` and `dawarich.example.com` behave the same.
 
 **Testing it.** Send yourself a family invitation (Family → invite) and watch the app log. If delivery fails the
 error appears there; "the job succeeded but no mail arrived" is almost always your relay rejecting or quarantining

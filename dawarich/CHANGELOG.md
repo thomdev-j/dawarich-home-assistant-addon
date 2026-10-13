@@ -6,7 +6,9 @@
 - **Geocoding moved to instance-level.** Settings → Integrations no longer has per-user geocoding; it is now under Settings → Instance (admin). Your addon config (`reverse_geocoding`, `photon_api_host`, etc.) still works — env vars are copied into Instance settings on upgrade
 - **The classic map renderer is gone.** The main map always renders from vector tiles via MapLibre GL JS. Browsers without WebGL can no longer show a map
 - **Slow first boot — let it finish.** DB migrations and background backfill jobs run on startup. Sidekiq waits for migrations to complete before processing jobs (already in place since 1.14.x)
-- No addon config or service script changes required
+- Fix outbound HTTP requests failing when the container resolves a hostname to an unreachable IPv6 address; Ruby's native connection logic can now fall back to IPv4
+- Add optional SMTP settings for family invitations, password resets, unlock instructions and digests, plus `external_url` for links using a Dawarich reverse-proxy hostname
+- Keep omitted optional SMTP and URL fields empty with the bundled bashio version; existing configurations need no changes
 
 ## 1.14.4-1
 
