@@ -34,9 +34,64 @@ printf '%s' "$(bashio::config 'background_processing_concurrency')" > /var/run/s
 # password-reset instructions). Unset, rendering those mails raises "Missing host
 # to link to!" and the request 500s — which is what a locked-out account hits on
 # its next login attempt, instead of being told the account is locked.
-PRIMARY_HOST="$(bashio::config 'application_hosts' | cut -d',' -f1 | xargs)"
+#
+# Dawarich hardcodes https:// in those links, so the address only works from
+# outside if it is one you actually reach over https — a Nabu Casa or reverse
+# proxy hostname. `external_url` overrides the guess for that case; without it
+# we keep using the first application_hosts entry, which is right for LAN use.
+PRIMARY_HOST="$(bashio::config 'external_url' '')"
+PRIMARY_HOST="${PRIMARY_HOST#https://}"
+PRIMARY_HOST="${PRIMARY_HOST#http://}"
+PRIMARY_HOST="${PRIMARY_HOST%%/*}"
+if [ -z "$PRIMARY_HOST" ]; then
+  PRIMARY_HOST="$(bashio::config 'application_hosts' | cut -d',' -f1 | xargs)"
+fi
 [ -z "$PRIMARY_HOST" ] && PRIMARY_HOST="homeassistant.local"
 printf '%s' "$PRIMARY_HOST" > /var/run/s6/container_environment/DOMAIN
+
+# --- SMTP ---
+# Dawarich always sets ActionMailer's delivery method to :smtp in production, so
+# with nothing configured Rails still tries to deliver and the job fails with
+# "SMTP-AUTH requested but missing user name" — the default authentication is
+# `plain` and there is no user name to send. Nothing in the app surfaces that;
+# it only shows up as a job retrying in the background. Family invitations,
+# password resets and digest mails all go through it.
+SMTP_SERVER="$(bashio::config 'smtp_server' '')"
+if [ -n "$SMTP_SERVER" ]; then
+  SMTP_FROM="$(bashio::config 'smtp_from' '')"
+  [ -z "$SMTP_FROM" ] && SMTP_FROM="$(bashio::config 'admin_email')"
+  SMTP_AUTH="$(bashio::config 'smtp_authentication' 'plain')"
+  SMTP_USERNAME="$(bashio::config 'smtp_username' '')"
+
+  printf '%s' "$SMTP_SERVER"                             > /var/run/s6/container_environment/SMTP_SERVER
+  printf '%s' "$(bashio::config 'smtp_port' '587')"      > /var/run/s6/container_environment/SMTP_PORT
+  printf '%s' "$SMTP_FROM"                               > /var/run/s6/container_environment/SMTP_FROM
+  printf '%s' "$SMTP_AUTH"                               > /var/run/s6/container_environment/SMTP_AUTHENTICATION
+
+  # Only write credentials when there are some. An unauthenticated relay needs
+  # smtp_authentication set to none, and Dawarich reads an empty user name as a
+  # user name, which is what produces the SMTP-AUTH error above.
+  if [ -n "$SMTP_USERNAME" ]; then
+    printf '%s' "$SMTP_USERNAME"                          > /var/run/s6/container_environment/SMTP_USERNAME
+    printf '%s' "$(bashio::config 'smtp_password' '')"    > /var/run/s6/container_environment/SMTP_PASSWORD
+  elif [ "$SMTP_AUTH" != "none" ]; then
+    bashio::log.warning "SMTP: smtp_username is empty but smtp_authentication is '${SMTP_AUTH}'."
+    bashio::log.warning "SMTP: set smtp_authentication to 'none' for an unauthenticated relay, or mail will fail to send."
+  fi
+
+  # Defaults to on when the option is absent: an unset key should not quietly
+  # downgrade the connection to plaintext.
+  if [ "$(bashio::config 'smtp_starttls' 'true')" = "false" ]; then
+    printf '%s' "false" > /var/run/s6/container_environment/SMTP_STARTTLS
+  else
+    printf '%s' "true"  > /var/run/s6/container_environment/SMTP_STARTTLS
+  fi
+
+  bashio::log.info "SMTP: enabled (${SMTP_SERVER}, from ${SMTP_FROM}, auth ${SMTP_AUTH})"
+  bashio::log.info "SMTP: links in mails will point at https://${PRIMARY_HOST}"
+else
+  bashio::log.info "SMTP: not configured — Dawarich will not send mail"
+fi
 
 # Admin user credentials
 printf '%s' "$(bashio::config 'admin_email')" > /var/run/s6/container_environment/ADMIN_EMAIL

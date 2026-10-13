@@ -77,6 +77,47 @@ Reverse geocoding converts GPS coordinates into place names. Disabled by default
 | `photon_api_key` | _(empty)_ | API key for Photon. Required for Dawarich Patreon supporters using `photon.dawarich.app`. |
 | `geoapify_api_key` | _(empty)_ | If set, uses Geoapify instead of Photon. |
 
+### Email (SMTP)
+
+Dawarich sends mail for family invitations, password resets, account-unlock instructions and the monthly and
+year-end digests. Leave `smtp_server` empty and it simply never sends any — but note that Rails still *tries*:
+with no settings the delivery job fails in the background with `SMTP-AUTH requested but missing user name` and
+retries for days, which is invisible unless you read the log.
+
+| Option | Default | Description |
+|---|---|---|
+| `smtp_server` | _(empty)_ | SMTP host, e.g. `smtp.gmail.com`. Empty disables mail. |
+| `smtp_port` | `587` | `587` for STARTTLS, `465` for implicit TLS, `25` for a local relay. |
+| `smtp_from` | _(empty)_ | From address. Falls back to `admin_email`. |
+| `smtp_username` | _(empty)_ | Leave empty for an unauthenticated relay, and set `smtp_authentication` to `none`. |
+| `smtp_password` | _(empty)_ | For Gmail this must be an [app password](https://myaccount.google.com/apppasswords), not your normal password. |
+| `smtp_authentication` | `plain` | `plain`, `login` (Office 365), `cram_md5`, `digest_md5`, `ntlm`, or `none`. |
+| `smtp_starttls` | `true` | Set `false` only for a trusted local relay on port 25. Ignored on port 465, which uses implicit TLS. |
+| `external_url` | _(empty)_ | Hostname used for links inside mails, e.g. `dawarich.example.com`. See below. |
+
+**Gmail example:**
+
+```yaml
+smtp_server: "smtp.gmail.com"
+smtp_port: 587
+smtp_from: "you@gmail.com"
+smtp_username: "you@gmail.com"
+smtp_password: "<16-character app password>"
+smtp_authentication: "plain"
+smtp_starttls: true
+```
+
+**Links in mails.** Dawarich builds them from a single hostname and always with `https://` — that is hardcoded
+upstream. The app defaults to the first entry of `application_hosts`, which is right if you only ever open
+Dawarich on your LAN, but a password-reset link pointing at `https://homeassistant.local:3000` is no use from a
+phone on mobile data. Set `external_url` to the address you actually reach the app on from outside — your Nabu
+Casa address or your own reverse-proxy hostname — and add that hostname to `application_hosts` too. A scheme and
+path are stripped, so `https://dawarich.example.com/` and `dawarich.example.com` behave the same.
+
+**Testing it.** Send yourself a family invitation (Family → invite) and watch the app log. If delivery fails the
+error appears there; "the job succeeded but no mail arrived" is almost always your relay rejecting or quarantining
+the message, so check its logs rather than Dawarich's.
+
 ### Important Notes
 
 - **`application_hosts`** must include the hostname/IP you use to access the UI, or Rails will reject requests (not needed for ingress)

@@ -1,5 +1,5 @@
 name: Dawarich
-version: "1.14.4-1"
+version: "1.15.3-1"
 slug: dawarich
 description: Self-hosted location tracking — Google Timeline alternative
 url: https://github.com/thomdev-j/dawarich-home-assistant-addon
@@ -43,6 +43,14 @@ options:
   photon_api_host: "https://photon.komoot.io"
   photon_api_key: ""
   geoapify_api_key: ""
+  external_url: ""
+  smtp_server: ""
+  smtp_port: 587
+  smtp_from: ""
+  smtp_username: ""
+  smtp_password: ""
+  smtp_authentication: "plain"
+  smtp_starttls: true
 schema:
   database_password: str
   time_zone: str
@@ -56,3 +64,11 @@ schema:
   photon_api_host: str
   photon_api_key: str
   geoapify_api_key: str
+  external_url: str?
+  smtp_server: str?
+  smtp_port: port?
+  smtp_from: str?
+  smtp_username: str?
+  smtp_password: password?
+  smtp_authentication: list(plain|login|cram_md5|digest_md5|ntlm|none)?
+  smtp_starttls: bool?

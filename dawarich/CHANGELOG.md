@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.15.3-1
+
+- Upgrade base image to Dawarich [1.15.0](https://github.com/Freika/dawarich/releases/tag/1.15.0), [1.15.1](https://github.com/Freika/dawarich/releases/tag/1.15.1), [1.15.2](https://github.com/Freika/dawarich/releases/tag/1.15.2) and [1.15.3](https://github.com/Freika/dawarich/releases/tag/1.15.3). The headline is a new vector-tile-only map renderer with in-map point editing, TREK trip import, shared trip maps for family members, and exploration achievements
+- **Geocoding moved to instance-level.** Settings → Integrations no longer has per-user geocoding; it is now under Settings → Instance (admin). Your addon config (`reverse_geocoding`, `photon_api_host`, etc.) still works — env vars are copied into Instance settings on upgrade
+- **The classic map renderer is gone.** The main map always renders from vector tiles via MapLibre GL JS. Browsers without WebGL can no longer show a map
+- **Slow first boot — let it finish.** DB migrations and background backfill jobs run on startup. Sidekiq waits for migrations to complete before processing jobs (already in place since 1.14.x)
+- No addon config or service script changes required
+
 ## 1.14.4-1
 
 - Upgrade base image to Dawarich [1.14.0](https://github.com/Freika/dawarich/releases/tag/1.14.0), [1.14.1](https://github.com/Freika/dawarich/releases/tag/1.14.1), [1.14.2](https://github.com/Freika/dawarich/releases/tag/1.14.2), [1.14.3](https://github.com/Freika/dawarich/releases/tag/1.14.3) and [1.14.4](https://github.com/Freika/dawarich/releases/tag/1.14.4). The headline is a Video Studio that renders the route on your map, or a trip, into a short MP4; Polish, Catalan and Simplified Chinese join the languages under Settings → General
